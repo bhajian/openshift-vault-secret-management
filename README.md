@@ -1,0 +1,1 @@
+# openshift-vault-secret-management
