@@ -18,9 +18,9 @@ Vault with Kubernetes API to validate service account tokens for authentication 
 Finally, we show how to verify the integration and a simple application is installed in the cluster 
 that uses service account to authenticate with Vault and receives secrets from Vault.
 
-## Vault architecture
+## Vault and Kubernetes workflow 
 
-![alt text](./architecture.png "Hashicorp Vault architecture")
+![alt text](./vault-k8s-auth-workflow.png "Hashicorp Vault architecture")
 
 
 ## Openshift Installation
@@ -143,8 +143,12 @@ $ kubectl exec -it vault-0 -- vault operator unseal <unsealkey>
 
 
 In order to enable Vault in HA mode, we need to install consul to store helm data in its persistence layer.
+
+![alt text](./architecture.png "Hashicorp Vault HA architecture")
+
 For more info: https://www.vaultproject.io/docs/platform/k8s/helm.html
 The following document shows how to install consul by its helm chart: https://github.com/hashicorp/consul-helm
+
 or running the following command:
 ```
   $ git clone https://github.com/hashicorp/consul-helm
@@ -219,17 +223,116 @@ $ vault write -tls-skip-verify auth/kubernetes/login role=demo jwt=$token
 
 ## Testing Vault as secret management solution for containers running in openshift
 
+![alt text](./app-vault.png "Hashicorp Vault HA architecture")
+
 1- Create an app:
 
 ```
- path "secret/app1" {
-       capabilities = ["read", "list"]
-     }
-     path "database/creds/app1" {
-       capabilities = ["read", "list"]
-     }
-   EOF
+# Create application policy for app1
+cat <<EOF > app1-policy.hcl
+  path "secret/app1" {
+    capabilities = ["read", "list"]
+  }
+  path "database/creds/app1" {
+    capabilities = ["read", "list"]
+  }
+EOF
+
+vault policy write app1-policy app1-policy.hcl
+vault policy read app1-policy
+# Write an example static secret
+vault secrets enable -path=secret -version=1 kv
+vault kv put secret/app1 username=app1 password=supasecr3t
+vault read secret/app1
+
+oc new-project vault-demo
+
+oc create sa app1
+oc create sa app2
+
+
+# Login to app1 role - vault CLI
+vault write "auth/ocp/login" role="app1-role" \
+  jwt="$(oc sa get-token app1)"
+# Read a secret using Vault token - vault CLI
+VAULT_TOKEN="<token-from-login>" vault read secret/app1
+# Login to app1 role - curl
+cat <<EOF > payload.json
+  { "role":"app1-role", "jwt":"$(oc sa get-token app1)" }
+EOF
+curl --request POST --data @payload.json \
+   "${VAULT_ADDR}/v1/auth/ocp/login"
+# Read a secret using Vault token - curl
+curl -H "X-Vault-Token: <token-from-login>" \
+   "${VAULT_ADDR}/v1/secret/app1"
+
+
+# error: "permission denied"
+VAULT_TOKEN="<token-from-login>" vault read secret/app2
+# error: "service account name not authorized"
+vault write "auth/ocp/login" role="app1-role" \
+  jwt="$(oc sa get-token app2)"
+
+
+# Create a deployment.yaml file:
+cat <<EOF> deployment.yaml
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: basic-example
+  namespace: vault-demo
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: basic-example
+    spec:
+      serviceAccountName: app1
+      containers:
+        - name: app
+          image: "kawsark/vault-example-init:0.0.7"
+          imagePullPolicy: Always
+          env:
+            - name: VAULT_ADDR
+              value: "${VAULT_ADDR}"
+            - name: VAULT_ROLE
+              value: "app1-role"
+            - name: SECRET_KEY
+              value: "secret/app1"
+            - name: VAULT_LOGIN_PATH
+              value: "auth/ocp/login"
+EOF
+# Display contents of deployment.yaml and ensure that the values of 
+# these 4 environment variables are correct: VAULT_ADDR, VAULT_ROLE,
+# SECRET_KEY and VAULT_LOGIN_PATH. These values will be read by the
+# application.
+cat deployment.yaml
+# Create deployment and check that the application pod is running
+oc create -f deployment.yaml
+oc get pods
+
+
+oc get pods
+# You will see a pod name starting with "basic-example-"
+export pod=<pod_name>
+oc logs ${pod}
+# Example successful response
+[ec2-user@ip-10-0-1-201 ~]$ oc get pods
+NAME                            READY     STATUS    RESTARTS   AGE
+basic-example-6785d4cc4-qlnpx   1/1       Running   0          3m
+[ec2-user@ip-10-0-1-201 ~]$ export pod=basic-example-6785d4cc4-qlnpx
+[ec2-user@ip-10-0-1-201 ~]$ oc logs ${pod}
+2019/07/20 15:55:32 ==> WARNING: Don't ever write secrets to logs.
+2019/07/20 15:55:32 ==>          This is for demonstration only.
+2019/07/20 15:55:32 s.ptVI20KkPBAJv0J6VkMM3ZHA
+2019/07/20 15:55:32 secret secret/app1 -> &{c2fe72f4-147d-0361-1834-7acca397cc74  2764800 false map[username:app1 password:supasecr3t] [] <nil> <nil>}
+2019/07/20 15:55:32 Starting renewal loop
+2019/07/20 15:55:32 Successfully renewed: &api.RenewOutput{RenewedAt:time.Time{wall:0x3a21573c, ext:63699234932, loc:(*time.Location)(nil)}, Secret:(*api.Secret)(0xc00006a6c0)}
 ``` 
+
+
+That is what she said:
 
 ```
 431  vault policy write app1-policy app1-policy.hcl
