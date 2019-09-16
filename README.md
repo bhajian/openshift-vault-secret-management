@@ -40,13 +40,17 @@ You may need an extra EC2 small instance as a client machine. On the client mach
 Now, you need to login to your Openshift server following these steps:
 https://docs.openshift.com/container-platform/4.1/installing/installing_aws/installing-aws-default.html 
 
+Now, your client is ready to use for installing Vault server in your Kubernetes cluster. 
+
 ### Setup Helm
 
 1- First you need to create a project in Openshift to install tiller:
 
-`$ oc new-project tiller
+```
+$ oc new-project tiller
  Now using project "tiller" on server "https://...".
- ...`
+ ...
+```
  
 Setup tiller namespace using the following command:
  
@@ -54,13 +58,15 @@ Setup tiller namespace using the following command:
 
 2- Install the Helm client locally.
 
-`$ curl -s https://storage.googleapis.com/kubernetes-helm/helm-v2.9.0-linux-amd64.tar.gz | tar xz
+```
+$ curl -s https://storage.googleapis.com/kubernetes-helm/helm-v2.9.0-linux-amd64.tar.gz | tar xz
  $ cd linux-amd64
  $ ./helm init --client-only
  ...
  $HELM_HOME has been configured at /.../.helm.
  Not installing Tiller due to 'client-only' flag having been set
- Happy Helming!`
+ Happy Helming!
+```
  
  3- Install tiller server:
  
@@ -68,35 +74,79 @@ Setup tiller namespace using the following command:
  
  Note: make sure you set appropriate tiller/helm version in the command above.
  
- `$ oc rollout status deployment tiller
+ ```
+ $ oc rollout status deployment tiller
   Waiting for rollout to finish: 0 of 1 updated replicas are available...
-  deployment "tiller" successfully rolled out`
-  
-  `$ ./helm version
+  deployment "tiller" successfully rolled out
+```
+Get the helm version  
+
+```
+   $ ./helm version
    Client: &version.Version{SemVer:"v2.9.0", GitCommit:"f6025bb9ee7daf9fee0026541c90a6f557a3e0bc", GitTreeState:"clean"}
-   Server: &version.Version{SemVer:"v2.9.0", GitCommit:"f6025bb9ee7daf9fee0026541c90a6f557a3e0bc", GitTreeState:"clean"}`
+   Server: &version.Version{SemVer:"v2.9.0", GitCommit:"f6025bb9ee7daf9fee0026541c90a6f557a3e0bc", GitTreeState:"clean"}
+```
    
  4- Create a separate project where we’ll install a Helm Chart for Vault
  
  `$ oc new-project vault
-  Now using project "myapp" on server "https://...".
+  Now using project "vault" on server "https://...".
   ...`
  
  5- Grant the Tiller server edit access to the current project
  
  `$ oc policy add-role-to-user edit "system:serviceaccount:${TILLER_NAMESPACE}:tiller"`
  
- 6- 
+ 6- Add admin policy privilege to the project:
  
- 7-  Install a Helm Chart.
+ `oc adm policy add-scc-to-user privileged -z vault -n vault` 
  
- `$ ./helm install https://github.com/jim-minter/nodejs-ex/raw/helm/helm/nodejs-0.1.tgz -n nodejs-ex
-  NAME: nodejs-ex
-  LAST DEPLOYED: ...
-  NAMESPACE: myapp
-  STATUS: DEPLOYED
-  ...`
-  
+ 7- Install a Helm Chart following this document: https://www.vaultproject.io/docs/platform/k8s/helm.html
+ or https://www.hashicorp.com/blog/announcing-the-vault-helm-chart
  
+``` 
+  $ git clone https://github.com/hashicorp/vault-helm.git
+  $ cd vault-helm 
+  $ git checkout v0.1.2
+  $ helm install --name=vault
+```
 
-Now, your client is ready to use for installing Vault server in your Kubernetes cluster. 
+8- Enable Vault:
+
+Check the status:
+
+``` 
+  # Check status
+  $ oc exec -it vault-0 -- vault status
+```
+
+Initialize Vault:
+
+```
+# Initialize
+$ kubectl exec -it vault-0 -- vault operator init -n 1 -t 1
+```
+
+Unseal Vault:
+
+```
+# Unseal vault
+$ kubectl exec -it vault-0 -- vault operator unseal <unsealkey>
+```
+
+For more info: https://www.vaultproject.io/docs/platform/k8s/helm.html
+In order to enable Vault in HA mode, we need to install consul to store helm data in its persistence layer.
+The following document shows how to install consul by its helm chart: https://github.com/hashicorp/consul-helm
+or running the following command:
+`
+helm install ./consul-helm
+`
+
+Once the consul is installed we can install vault after changing values.yaml and enable the ha mode to enabled.
+
+9- Create a route to access Vault UI:
+
+```
+  $ oc create route passthrough vault-ui --service vault-ui -n vault
+```
+
