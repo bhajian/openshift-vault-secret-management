@@ -242,10 +242,21 @@ cat <<EOF > app1-policy.hcl
   }
 EOF
 
+# Create application policy for app2
+cat <<EOF > app2-policy.hcl
+  path "secret/app2" {
+    capabilities = ["read", "list"]
+  }
+  path "database/creds/app2" {
+    capabilities = ["read", "list"]
+  }
+EOF
+
 # set vault token in your client machine
 export VAULT_TOKEN=$YOUR_ROOT_TOKEN
 
 vault policy write app1-policy app1-policy.hcl
+vault policy write app2-policy app2-policy.hcl
 vault policy read app1-policy
 # Write an example static secret
 vault secrets enable -path=secret -version=1 kv
@@ -259,6 +270,12 @@ vault write "auth/kubernetes/role/app1-role" \
   bound_service_account_namespaces="*" \
   policies="app1-policy" ttl=1h
 
+# Configure the app2 role in Vault
+vault write "auth/kubernetes/role/app2-role" \
+  bound_service_account_names="default,app2" \
+  bound_service_account_namespaces="*" \
+  policies="app2-policy" ttl=1h
+
 oc new-project vault-demo
 
 oc create sa app1
@@ -270,26 +287,30 @@ export VAULT_TOKEN=
 # Login to app1 role - vault CLI
 vault write "auth/kubernetes/login" role="app1-role" \
   jwt="$(oc sa get-token app1)"
+
 # Read a secret using Vault token - vault CLI
 VAULT_TOKEN="<token-from-login>" vault read secret/app1
+
 # Login to app1 role - curl
 cat <<EOF > payload.json
   { "role":"app1-role", "jwt":"$(oc sa get-token app1)" }
 EOF
+
 curl --request POST --data @payload.json \
    "${VAULT_ADDR}/v1/auth/kubernetes/login"
+
 # Read a secret using Vault token - curl
 curl -H "X-Vault-Token: <token-from-login>" \
    "${VAULT_ADDR}/v1/secret/app1"
 
-
-
-# error: "permission denied"
-VAULT_TOKEN="<token-from-login>" vault read secret/app2
 # error: "service account name not authorized"
 vault write "auth/kubernetes/login" role="app1-role" \
   jwt="$(oc sa get-token app2)"
 
+# error: "permission denied"
+vault write "auth/kubernetes/login" role="app2-role" \
+  jwt="$(oc sa get-token app2)"
+VAULT_TOKEN="<token-from-login>" vault read secret/app2
 
 # Create a deployment.yaml file:
 cat <<EOF> deployment.yaml
@@ -320,6 +341,7 @@ spec:
             - name: VAULT_LOGIN_PATH
               value: "auth/ocp/login"
 EOF
+
 # Display contents of deployment.yaml and ensure that the values of 
 # these 4 environment variables are correct: VAULT_ADDR, VAULT_ROLE,
 # SECRET_KEY and VAULT_LOGIN_PATH. These values will be read by the
@@ -347,65 +369,3 @@ basic-example-6785d4cc4-qlnpx   1/1       Running   0          3m
 2019/07/20 15:55:32 Starting renewal loop
 2019/07/20 15:55:32 Successfully renewed: &api.RenewOutput{RenewedAt:time.Time{wall:0x3a21573c, ext:63699234932, loc:(*time.Location)(nil)}, Secret:(*api.Secret)(0xc00006a6c0)}
 ``` 
-
-
-That is what she said:
-
-```
-431  vault policy write app1-policy app1-policy.hcl
-  432  vault policy read app1-policy
-  433  vault secrets enable -path=secret -version=1 kv
-  434  vault kv put secret/app1 username=app1 password=supasecr3t
-  435  vault read secret/app1
-  436  oc new-project vault-demo
-  437  oc projects
-  438  oc create sa vault-auth
-  439  oc adm policy add-cluster-role-to-user   system:auth-delegator system:serviceaccount:vault-demo:vault-auth
-  440  oc serviceaccounts get-token vault-auth > reviewer_sa_jwt.txt
-  441  ls
-  442  cat reviewer_sa_jwt.txt
-  443  oc create sa app1
-  444  oc create sa app2
-  445  oc get sa
-  446  vault write "auth/ocp/role/app1-role"   bound_service_account_names="default,app1"   bound_service_account_namespaces="vault-demo"   policies="app1-policy" ttl=1h
-  447  vault write "auth/kubernetes/role/app1-role"   bound_service_account_names="default,app1"   bound_service_account_namespaces="vault-demo"   policies="app1-policy" ttl=1h
-  448  oc sa get-token app1
-  449  vault write "auth/kubernetes/login" role="app1-role" jwt="
-450  cat <<EOF > payload.json
-  451    { "role":"app1-role", "jwt":"$(oc sa get-token app1)" }
-  452  EOF
-  453  curl --request POST --data @payload.json    "${VAULT_ADDR}/v1/auth/kubernetes/login"
-  454  curl -H "X-Vault-Token: s.sPktWyjIWIaHze5DxWy0bWYy" "${VAULT_ADDR}/v1/secret/app1"
-  455  cat <<EOF> deployment.yaml
-  456  apiVersion: apps/v1beta1
-  457  kind: Deployment
-  458  metadata:
-  459    name: basic-example
-  460    namespace: vault-demo
-  461  spec:
-  462    replicas: 1
-  463    template:
-  464      metadata:
-  465        labels:
-  466          app: basic-example
-  467      spec:
-  468        serviceAccountName: app1
-  469        containers:
-  470          - name: app
-  471            image: "kawsark/vault-example-init:0.0.7"
-  472            imagePullPolicy: Always
-  473            env:
-  474              - name: VAULT_ADDR
-  475                value: "${VAULT_ADDR}"
-  476              - name: VAULT_ROLE
-  477                value: "app1-role"
-  478              - name: SECRET_KEY
-  479                value: "secret/app1"
-  480              - name: VAULT_LOGIN_PATH
-  481                value: "auth/ocp/login"
-  482  EOF
-  483  ls
-  484  oc create -f deployment.yaml
-  485  oc get pods
-```
-
