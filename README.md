@@ -7,7 +7,7 @@ with a third party product such as Hashicorp Vault.
 
 The reason for that is that Kubernetes has Kubernetes secret which is not really a safe place to 
 store secrets due to lack of encryption in Kubernetes. Kubernetes secret obfuscates the secrets
-using the Base64 hash function. 
+using the Base64 encoding. 
 
 Hashicorp Vault is a de facto product designed for secret management. Vault can be integrated with
 many different cloud providers and products including Kubernetes which makes it a unique safe secret 
@@ -242,21 +242,33 @@ cat <<EOF > app1-policy.hcl
   }
 EOF
 
+# set vault token in your client machine
+export VAULT_TOKEN=$YOUR_ROOT_TOKEN
+
 vault policy write app1-policy app1-policy.hcl
 vault policy read app1-policy
 # Write an example static secret
 vault secrets enable -path=secret -version=1 kv
 vault kv put secret/app1 username=app1 password=supasecr3t
+vault kv put secret/app2 username=app2 password=someNonSense
 vault read secret/app1
+
+# Configure the app1 role in Vault
+vault write "auth/kubernetes/role/app1-role" \
+  bound_service_account_names="default,app1" \
+  bound_service_account_namespaces="*" \
+  policies="app1-policy" ttl=1h
 
 oc new-project vault-demo
 
 oc create sa app1
 oc create sa app2
 
+# unset vault token in your client machine
+export VAULT_TOKEN=
 
 # Login to app1 role - vault CLI
-vault write "auth/ocp/login" role="app1-role" \
+vault write "auth/kubernetes/login" role="app1-role" \
   jwt="$(oc sa get-token app1)"
 # Read a secret using Vault token - vault CLI
 VAULT_TOKEN="<token-from-login>" vault read secret/app1
@@ -265,16 +277,17 @@ cat <<EOF > payload.json
   { "role":"app1-role", "jwt":"$(oc sa get-token app1)" }
 EOF
 curl --request POST --data @payload.json \
-   "${VAULT_ADDR}/v1/auth/ocp/login"
+   "${VAULT_ADDR}/v1/auth/kubernetes/login"
 # Read a secret using Vault token - curl
 curl -H "X-Vault-Token: <token-from-login>" \
    "${VAULT_ADDR}/v1/secret/app1"
 
 
+
 # error: "permission denied"
 VAULT_TOKEN="<token-from-login>" vault read secret/app2
 # error: "service account name not authorized"
-vault write "auth/ocp/login" role="app1-role" \
+vault write "auth/kubernetes/login" role="app1-role" \
   jwt="$(oc sa get-token app2)"
 
 
