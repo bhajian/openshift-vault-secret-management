@@ -261,7 +261,7 @@ vault policy read app1-policy
 # Write an example static secret
 vault secrets enable -path=secret -version=1 kv
 vault kv put secret/app1 username=app1 password=supasecr3t
-vault kv put secret/app2 username=app2 password=someNonSense
+vault kv put secret/app2 username=app2 password=That1sWhatSheSaid
 vault read secret/app1
 
 # Configure the app1 role in Vault
@@ -312,6 +312,7 @@ vault write "auth/kubernetes/login" role="app2-role" \
   jwt="$(oc sa get-token app2)"
 VAULT_TOKEN="<token-from-login>" vault read secret/app2
 
+# ///////////////////////////////
 # Create a deployment.yaml file:
 cat <<EOF> deployment.yaml
 apiVersion: apps/v1beta1
@@ -339,7 +340,7 @@ spec:
             - name: SECRET_KEY
               value: "secret/app1"
             - name: VAULT_LOGIN_PATH
-              value: "auth/ocp/login"
+              value: "auth/kubernetes/login"
 EOF
 
 # Display contents of deployment.yaml and ensure that the values of 
