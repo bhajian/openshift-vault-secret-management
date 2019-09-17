@@ -64,7 +64,7 @@ Setup tiller namespace using the following command:
 2- Install the Helm client locally.
 
 ```
-$ curl -s https://storage.googleapis.com/kubernetes-helm/helm-v2.9.0-linux-amd64.tar.gz | tar xz
+$ curl -s https://storage.googleapis.com/kubernetes-helm/helm-v2.14.0-linux-amd64.tar.gz | tar xz
  $ cd linux-amd64
  $ ./helm init --client-only
  ...
@@ -75,7 +75,7 @@ $ curl -s https://storage.googleapis.com/kubernetes-helm/helm-v2.9.0-linux-amd64
  
  3- Install tiller server:
  
- `oc process -f https://github.com/openshift/origin/raw/master/examples/helm/tiller-template.yaml -p TILLER_NAMESPACE="${TILLER_NAMESPACE}" -p HELM_VERSION=v2.9.0 | oc create -f -`
+ `oc process -f https://github.com/openshift/origin/raw/master/examples/helm/tiller-template.yaml -p TILLER_NAMESPACE="${TILLER_NAMESPACE}" -p HELM_VERSION=v2.14.0 | oc create -f -`
  
  Note: make sure you set appropriate tiller/helm version in the command above.
  
@@ -88,19 +88,23 @@ Get the helm version
 
 ```
    $ ./helm version
-   Client: &version.Version{SemVer:"v2.9.0", GitCommit:"f6025bb9ee7daf9fee0026541c90a6f557a3e0bc", GitTreeState:"clean"}
-   Server: &version.Version{SemVer:"v2.9.0", GitCommit:"f6025bb9ee7daf9fee0026541c90a6f557a3e0bc", GitTreeState:"clean"}
+   Client: &version.Version{SemVer:"v2.14.0", GitCommit:"f6025bb9ee7daf9fee0026541c90a6f557a3e0bc", GitTreeState:"clean"}
+   Server: &version.Version{SemVer:"v2.14.0", GitCommit:"f6025bb9ee7daf9fee0026541c90a6f557a3e0bc", GitTreeState:"clean"}
 ```
    
  4- Create a separate project where we’ll install a Helm Chart for Vault
  
- `$ oc new-project vault
+ ```
+  $ oc new-project vault
   Now using project "vault" on server "https://...".
-  ...`
+  ...
+```
  
  5- Grant the Tiller server edit access to the current project
  
- `$ oc policy add-role-to-user edit "system:serviceaccount:${TILLER_NAMESPACE}:tiller"`
+```
+ $ oc policy add-role-to-user edit "system:serviceaccount:${TILLER_NAMESPACE}:tiller"
+```
  
  6- Add admin policy privilege to the project:
  
@@ -113,7 +117,7 @@ Get the helm version
   $ git clone https://github.com/hashicorp/vault-helm.git
   $ cd vault-helm 
   $ git checkout v0.1.2
-  $ helm install --name=vault
+  $ helm install . --name=vault
 ```
 
 8- Initialize and Unseal Vault:
@@ -180,7 +184,7 @@ In order to enable Openshift auth method using service account we would need to 
 
 Or run:
 
-`echo "export VAULT_ADDR=http://vault-vault.apps.vault-cluster.foundation01.com" >> ~/.bash_profile`
+`echo "export VAULT_ADDR=http://$Vault_Kubernetes_address" >> ~/.bash_profile`
 
 2- Integrate vault with kubernetes API:
  
@@ -198,7 +202,7 @@ $ pod=`oc get pods | grep vault | awk '{print $1}'`
 
 # Save kubernetes service account certificate in a local file
 $ oc exec $pod -- cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt >> ca.crt
-$ export VAULT_TOKEN=$ROOT_TOKEN
+$ export VAULT_TOKEN=$ROOT_TOKEN_YOU_GET_FROM_VAULT_INIT
 
 # enable kubernetes verification method in vault
 $ vault auth enable -tls-skip-verify kubernetes
@@ -210,7 +214,7 @@ rm ca.crt
 
 
 # Set Vault policy for kubernetes service account:
-$ vault write -tls-skip-verify auth/kubernetes/role/demo bound_service_account_names=default bound_service_account_namespaces='*' policies=default ttl=1h 
+$ vault write -tls-skip-verify auth/kubernetes/role/test bound_service_account_names=default bound_service_account_namespaces='*' policies=default ttl=1h 
 ```
 
 Now, we try to test the service account token to authenticate with Vault:
@@ -218,7 +222,7 @@ Now, we try to test the service account token to authenticate with Vault:
 ```
 $ secret=`oc describe sa default | grep 'Tokens:' | awk '{print $2}'`
 $ token=`oc describe secret $secret | grep 'token:' | awk '{print $2}'`
-$ vault write -tls-skip-verify auth/kubernetes/login role=demo jwt=$token
+$ vault write -tls-skip-verify auth/kubernetes/login role=test jwt=$token
 ```
 
 ## Testing Vault as secret management solution for containers running in openshift
