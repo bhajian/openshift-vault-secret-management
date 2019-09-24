@@ -393,6 +393,6 @@ $ oc get routes
 3- Create a buildconfig to setup your pipeline using our template
 
 ```
-$ oc create -f https://raw.githubusercontent.com/bhajian/openshift-vault-secret-management/blob/master/buildconfig.yaml
+$ oc create -f https://raw.githubusercontent.com/bhajian/openshift-vault-secret-management/master/buildconfig.yaml
 ```
 
