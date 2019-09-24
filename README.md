@@ -22,7 +22,7 @@ that uses service account to authenticate with Vault and receives secrets from V
 
 ### Openshift + Vault Architecture:
 
-![alt text](./architecture.png "Openshift + Vault architecture")
+![alt text](./oc-vault-arc.png "Openshift + Vault architecture")
 
 ### Vault workflow:
 ![alt text](./vault-k8s-auth-workflow.png "Hashicorp Vault architecture")
