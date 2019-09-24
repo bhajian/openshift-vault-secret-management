@@ -20,6 +20,11 @@ that uses service account to authenticate with Vault and receives secrets from V
 
 ## Vault and Kubernetes workflow 
 
+### Openshift + Vault Architecture:
+
+![alt text](./architecture.png "Hashicorp Vault architecture")
+
+### Vault workflow:
 ![alt text](./vault-k8s-auth-workflow.png "Hashicorp Vault architecture")
 
 
@@ -148,7 +153,7 @@ $ kubectl exec -it vault-0 -- vault operator unseal <unsealkey>
 
 In order to enable Vault in HA mode, we need to install consul to store helm data in its persistence layer.
 
-![alt text](./architecture.png "Hashicorp Vault HA architecture")
+![alt text](ha-architecture.png "Hashicorp Vault HA architecture")
 
 For more info: https://www.vaultproject.io/docs/platform/k8s/helm.html
 The following document shows how to install consul by its helm chart: https://github.com/hashicorp/consul-helm
@@ -165,7 +170,9 @@ Once the consul is installed we can install vault after changing values.yaml and
 9- Create a route to access Vault UI:
 
 ```
-  $ oc create route passthrough vault-ui --service vault-ui -n vault
+  $ oc expose service/vault
+
+  $ oc get route
 ```
 
 Now, vault is successfully installed and ready to be integrated with Kubernetes (Openshift).
@@ -180,7 +187,10 @@ In order to enable Openshift auth method using service account we would need to 
 
 1- setup Vault client on the jumpbox to point to the Vault server:
 
-`export VAULT_ADDR=http://$Vault_Kubernetes_address`
+you can get $VAULT_KUBERNETES_ADDRESS by running `oc get route` and paste the address
+ in the bellow command.
+
+`export VAULT_ADDR=http://$VAULT_KUBERNETES_ADDRESS`
 
 Or run:
 
@@ -370,3 +380,19 @@ basic-example-6785d4cc4-qlnpx   1/1       Running   0          3m
 2019/07/20 15:55:32 Starting renewal loop
 2019/07/20 15:55:32 Successfully renewed: &api.RenewOutput{RenewedAt:time.Time{wall:0x3a21573c, ext:63699234932, loc:(*time.Location)(nil)}, Secret:(*api.Secret)(0xc00006a6c0)}
 ``` 
+## Writing Secrets to Vault using CICD pipeline
+1- Create a new cicd project
+`oc new-project cicd`
+2- Create Jenkins and pipeline infrastructure app in the project
+
+```
+$ oc new-app jenkins-persistent
+$ oc get routes
+```
+
+3- Create a buildconfig to setup your pipeline using our template
+
+```
+$ oc create -f https://raw.githubusercontent.com/bhajian/openshift-vault-secret-management/blob/master/buildconfig.yaml
+```
+

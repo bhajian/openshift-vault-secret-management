@@ -13,6 +13,9 @@ spec:
         // NOTE, the "pipeline" directive/closure from the declarative pipeline syntax needs to include, or be nested outside,
         // and "openshift" directive/closure from the OpenShift Client Plugin for Jenkins.  Otherwise, the declarative pipeline engine
         // will not be fully engaged.
+
+        import groovy.json.JsonSlurperClassic
+
         pipeline {
             agent {
               node {
@@ -42,12 +45,32 @@ spec:
                         script {
                             openshift.withCluster() {
                                 openshift.withProject() {
-                                    // delete everything with this template label
                                     openshift.selector("all", [ template : templateName ]).delete()
                                     // delete any secrets with this template label
                                     if (openshift.selector("secrets", templateName).exists()) {
                                         openshift.selector("secrets", templateName).delete()
                                     }
+
+                                    // Writing secrets to Vault
+
+                                    def token = openshift.raw("sa get-token", "jenkins")
+                                    String tokenValue = token.actions[0].out
+                                    writeFile file: 'credential.json', text: '{ "role":"cicd", "jwt": "'+tokenValue+'"}'
+
+                                    sh 'curl --request POST --data @credential.json "http://vault-vault.apps.vault-cluster.foundation01.com/v1/auth/kubernetes/login" > token.json'
+                                    def file = readFile "token.json"
+                                    def clientToken = ""
+                                    try {
+                                        def slurper = new groovy.json.JsonSlurperClassic()
+                                        def result = slurper.parseText(file)
+                                        clientToken = result.auth.client_token
+                                    } catch (Exception ex) {
+                                		echo ex.getMessage()
+                                	}
+
+                                    writeFile file: 'secrets.json', text: '{  "foo": "bar",  "zip": "zap" }'
+                                    sh 'curl  --header "X-Vault-Token: '+clientToken+'" --request POST --data @secret.json "http://vault-vault.apps.vault-cluster.foundation01.com/v1/secret/PATH/TO/SECRET"'
+
                                 }
                             }
                         } // script
