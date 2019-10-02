@@ -418,6 +418,10 @@ $ vault write "auth/kubernetes/role/cicd" bound_service_account_names="default,j
 $ oc create -f https://raw.githubusercontent.com/bhajian/openshift-vault-secret-management/master/buildconfig.yaml
 ```
 
+Once the pipeline is created run the pipeline but it won't deliver the secret to Vault because Jenkins admin needs to
+approve Jenkins script to use a certain library. You may need to go to Jenkins configurations and accept script 
+approvals and run the pipeline again.
+
 # Appendix
 
 ![alt text](./vault-k8s-auth-workflow.png "Hashicorp Vault architecture")
