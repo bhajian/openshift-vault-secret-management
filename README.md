@@ -402,6 +402,19 @@ $ oc get routes
 3- Create a buildconfig to setup your pipeline using our template
 
 ```
+$ cat <<EOF > cicd.hcl
+  path "database/creds/*" {
+    capabilities = ["list", "create"]
+  }
+  path "secret/*" {
+    capabilities = ["create", "read", "update", "delete", "list"]
+  }
+EOF
+
+$ vault policy write cicd cicd.hcl
+
+$ vault write "auth/kubernetes/role/cicd" bound_service_account_names="default,jenkins" bound_service_account_namespaces="*" policies="cicd" ttl=1h
+
 $ oc create -f https://raw.githubusercontent.com/bhajian/openshift-vault-secret-management/master/buildconfig.yaml
 ```
 

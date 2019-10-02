@@ -1,7 +1,7 @@
 kind: "BuildConfig"
 apiVersion: "v1"
 metadata:
-  name: "nodejs-sample-pipeline"
+  name: "vault-demo-pipeline"
 spec:
   strategy:
     jenkinsPipelineStrategy:
@@ -55,21 +55,25 @@ spec:
 
                                     def token = openshift.raw("sa get-token", "jenkins")
                                     String tokenValue = token.actions[0].out
+                                    echo 'sa token: ' + tokenValue
+
                                     writeFile file: 'credential.json', text: '{ "role":"cicd", "jwt": "'+tokenValue+'"}'
 
-                                    sh 'curl --request POST --data @credential.json "http://vault-vault.apps.vault-cluster.foundation01.com/v1/auth/kubernetes/login" > token.json'
+                                    sh 'curl --request POST --data @credential.json "http://vault-vault.apps.683d.example.opentlc.com/v1/auth/kubernetes/login" > token.json'
                                     def file = readFile "token.json"
+                                    echo 'file: ' + file
+
                                     def clientToken = ""
                                     try {
                                         def slurper = new groovy.json.JsonSlurperClassic()
                                         def result = slurper.parseText(file)
                                         clientToken = result.auth.client_token
                                     } catch (Exception ex) {
-                                		echo ex.getMessage()
-                                	}
+                                    echo ex.getMessage()
+                                  }
 
-                                    writeFile file: 'secrets.json', text: '{  "foo": "bar",  "zip": "zap" }'
-                                    sh 'curl  --header "X-Vault-Token: '+clientToken+'" --request POST --data @secret.json "http://vault-vault.apps.vault-cluster.foundation01.com/v1/secret/PATH/TO/SECRET"'
+                                    writeFile file: 'secret.json', text: '{  "foo": "bar",  "zip": "zap" }'
+                                    sh 'curl  --header "X-Vault-Token: '+clientToken+'" --request POST --data @secret.json "http://vault-vault.apps.683d.example.opentlc.com/v1/secret/PATH/TO/SECRET"'
 
                                 }
                             }
