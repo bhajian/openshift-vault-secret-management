@@ -20,14 +20,18 @@ that uses service account to authenticate with Vault and receives secrets from V
 
 ## Vault and Kubernetes authentication workflow 
 
-### Kubernetes Vault workflow using Kubernetes service account:
+### Openshift + Vault using Kubernetes service account workflow:
 Vault and kubernetes authentication is a method to be used when vault can trust kubernetes as a
-trusted orchestrator. 
+trusted orchestrator. For more info: https://learn.hashicorp.com/vault/identity-access-management/iam-secure-intro 
 
-![alt text](./vault-k8s-auth-workflow.png "Hashicorp Vault architecture")
+![alt text](./kubernetes-vault-multi-tenancy-arc.png "Openshift + Vault architecture")
 
 ### Vault app-role workflow:
-Approle is another pattern that can be used in order to authenticate with Vault.
+Approle is another pattern that can be used in order to authenticate with Vault. App role has more flexibility 
+to deliver a secret 0 to the container for authenticating with Vault. This method needs two pieces of information 
+for authentication with Vault: 1- Secret 2- Role Id 
+
+For more info: https://www.vaultproject.io/docs/auth/approle.html   
 
 ![alt text](./app-role-pattern.png "Hashicorp Vault architecture")
 
@@ -385,10 +389,6 @@ basic-example-6785d4cc4-qlnpx   1/1       Running   0          3m
 ``` 
 ## Writing Secrets to Vault using CICD pipeline
 
-### Openshift + Vault Architecture:
-
-![alt text](./kubernetes-vault-multi-tenancy-arc.png "Openshift + Vault architecture")
-
 ### Creating a CICD pipeline to generate secrets and save them in vault using kuberntes service account
 1- Create a new cicd project
 `oc new-project cicd`
@@ -417,4 +417,8 @@ $ vault write "auth/kubernetes/role/cicd" bound_service_account_names="default,j
 
 $ oc create -f https://raw.githubusercontent.com/bhajian/openshift-vault-secret-management/master/buildconfig.yaml
 ```
+
+# Appendix
+
+![alt text](./vault-k8s-auth-workflow.png "Hashicorp Vault architecture")
 
