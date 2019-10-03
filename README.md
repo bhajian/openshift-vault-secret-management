@@ -19,6 +19,11 @@ Finally, we show how to verify the integration and a simple application is insta
 that uses service account to authenticate with Vault and receives secrets from Vault.
 
 ## Vault and Kubernetes authentication workflow 
+Vault provides a couple of different ways to authenticate the client. There are two main approaches for authenticating a client:
+1- Platform integration
+2- Trusted orchestration platform
+
+In the following sections, these methods are described in more detail.
 
 ### Openshift + Vault using Kubernetes service account workflow:
 Vault and kubernetes authentication is a method to be used when vault can trust kubernetes as a
